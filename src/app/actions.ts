@@ -43,7 +43,7 @@ export async function updateTaskQuadrant(
   },
 ) {
   if (!taskId) {
-    throw new Error("Task id is required.");
+    throw new Error("Task ID is required.");
   }
 
   const prisma = getPrismaClient();
@@ -61,7 +61,7 @@ export async function updateTaskQuadrant(
 
 export async function deleteTask(taskId: string) {
   if (!taskId) {
-    throw new Error("Task id is required.");
+    throw new Error("Task ID is required.");
   }
 
   const prisma = getPrismaClient();
