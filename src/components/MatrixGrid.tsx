@@ -1,10 +1,17 @@
 "use client";
 
-import { useOptimistic, useRef, useTransition } from "react";
+import { useEffect, useOptimistic, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { addTask, deleteTask, updateTaskQuadrant } from "@/app/actions";
+import { addTask, deleteTask, markTaskDone, updateTaskQuadrant } from "@/app/actions";
 import { Quadrant } from "@/components/Quadrant";
-import type { PriorityLevel, Quadrant as QuadrantDefinition, Task } from "@/types/task";
+import { TaskReminders } from "@/components/TaskReminders";
+import type {
+  PriorityLevel,
+  Quadrant as QuadrantDefinition,
+  Task,
+  TaskCategory,
+  TaskFrequency,
+} from "@/types/task";
 
 type OptimisticAction =
   | {
@@ -12,6 +19,10 @@ type OptimisticAction =
       taskId: string;
       urgency: PriorityLevel;
       importance: PriorityLevel;
+    }
+  | {
+      type: "complete";
+      taskId: string;
     }
   | {
       type: "delete";
@@ -57,11 +68,25 @@ function updateOptimisticTasks(tasks: Task[], action: OptimisticAction) {
           ? { ...task, urgency: action.urgency, importance: action.importance }
           : task,
       );
+    case "complete":
+      return tasks.filter((task) => task.id !== action.taskId);
     case "delete":
       return tasks.filter((task) => task.id !== action.taskId);
     default:
       return tasks;
   }
+}
+
+function getDefaultReminderTime(urgency: PriorityLevel, importance: PriorityLevel) {
+  if (urgency === "High" && importance === "High") {
+    return "09:00";
+  }
+
+  if (urgency === "Low" && importance === "High") {
+    return "15:00";
+  }
+
+  return "";
 }
 
 interface MatrixGridProps {
@@ -73,6 +98,36 @@ export function MatrixGrid({ tasks }: MatrixGridProps) {
   const formRef = useRef<HTMLFormElement>(null);
   const [isPending, startTransition] = useTransition();
   const [optimisticTasks, applyOptimisticUpdate] = useOptimistic(tasks, updateOptimisticTasks);
+  const [urgencyValue, setUrgencyValue] = useState<PriorityLevel>("High");
+  const [importanceValue, setImportanceValue] = useState<PriorityLevel>("High");
+  const [frequencyValue, setFrequencyValue] = useState<TaskFrequency>("ONE_TIME");
+  const [categoryValue, setCategoryValue] = useState<TaskCategory>("GENERAL");
+  const [reminderTouched, setReminderTouched] = useState(false);
+  const [reminderTime, setReminderTime] = useState(
+    getDefaultReminderTime("High", "High"),
+  );
+
+  useEffect(() => {
+    if (categoryValue === "PRAYER") {
+      setFrequencyValue("DAILY");
+      setReminderTime("");
+      setReminderTouched(false);
+      return;
+    }
+
+    if (!reminderTouched) {
+      setReminderTime(getDefaultReminderTime(urgencyValue, importanceValue));
+    }
+  }, [categoryValue, urgencyValue, importanceValue, reminderTouched]);
+
+  const resetFormState = () => {
+    setUrgencyValue("High");
+    setImportanceValue("High");
+    setFrequencyValue("ONE_TIME");
+    setCategoryValue("GENERAL");
+    setReminderTouched(false);
+    setReminderTime(getDefaultReminderTime("High", "High"));
+  };
 
   const handleDrop = (taskId: string, quadrant: { urgency: PriorityLevel; importance: PriorityLevel }) => {
     const currentTask = optimisticTasks.find((task) => task.id === taskId);
@@ -112,8 +167,21 @@ export function MatrixGrid({ tasks }: MatrixGridProps) {
     });
   };
 
+  const handleComplete = (taskId: string) => {
+    startTransition(async () => {
+      applyOptimisticUpdate({ type: "complete", taskId });
+
+      try {
+        await markTaskDone(taskId);
+      } finally {
+        router.refresh();
+      }
+    });
+  };
+
   return (
     <div className="space-y-8">
+      <TaskReminders tasks={optimisticTasks} />
       <form
         ref={formRef}
         action={async (formData) => {
@@ -121,23 +189,27 @@ export function MatrixGrid({ tasks }: MatrixGridProps) {
             try {
               await addTask(formData);
               formRef.current?.reset();
+              resetFormState();
             } finally {
               router.refresh();
             }
           });
         }}
-        className="grid gap-3 rounded-2xl border border-black/10 bg-white p-4 shadow-sm md:grid-cols-[minmax(0,1fr)_160px_160px_auto]"
+        className="grid gap-3 rounded-2xl border border-black/10 bg-white p-4 shadow-sm md:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_140px_140px_140px_140px_140px_auto]"
       >
         <input
           type="text"
           name="title"
           required
           placeholder="Add a task title"
-          className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white"
+          className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white md:col-span-2 lg:col-span-1"
         />
         <select
           name="urgency"
-          defaultValue="High"
+          value={urgencyValue}
+          onChange={(event) => {
+            setUrgencyValue(event.target.value as PriorityLevel);
+          }}
           className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white"
         >
           <option value="High">High Urgency</option>
@@ -145,12 +217,49 @@ export function MatrixGrid({ tasks }: MatrixGridProps) {
         </select>
         <select
           name="importance"
-          defaultValue="High"
+          value={importanceValue}
+          onChange={(event) => {
+            setImportanceValue(event.target.value as PriorityLevel);
+          }}
           className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white"
         >
           <option value="High">High Importance</option>
           <option value="Low">Low Importance</option>
         </select>
+        <select
+          name="frequency"
+          value={frequencyValue}
+          onChange={(event) => {
+            setFrequencyValue(event.target.value as TaskFrequency);
+          }}
+          disabled={categoryValue === "PRAYER"}
+          className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white disabled:cursor-not-allowed disabled:opacity-70"
+        >
+          <option value="ONE_TIME">One-time</option>
+          <option value="DAILY">Daily</option>
+        </select>
+        <select
+          name="category"
+          value={categoryValue}
+          onChange={(event) => {
+            setCategoryValue(event.target.value as TaskCategory);
+          }}
+          className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white"
+        >
+          <option value="GENERAL">General</option>
+          <option value="PRAYER">Prayer</option>
+        </select>
+        <input
+          type="time"
+          name="reminderTime"
+          value={reminderTime}
+          onChange={(event) => {
+            setReminderTouched(true);
+            setReminderTime(event.target.value);
+          }}
+          disabled={categoryValue === "PRAYER"}
+          className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white disabled:cursor-not-allowed disabled:opacity-70"
+        />
         <button
           type="submit"
           disabled={isPending}
@@ -174,6 +283,7 @@ export function MatrixGrid({ tasks }: MatrixGridProps) {
             urgency={quadrant.urgency}
             importance={quadrant.importance}
             onDelete={handleDelete}
+            onComplete={handleComplete}
             onDropTask={handleDrop}
           />
         ))}

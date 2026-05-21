@@ -12,6 +12,7 @@ interface QuadrantProps {
   urgency: PriorityLevel;
   importance: PriorityLevel;
   onDelete: (taskId: string) => void;
+  onComplete: (taskId: string) => void;
   onDropTask: (taskId: string, quadrant: { urgency: PriorityLevel; importance: PriorityLevel }) => void;
 }
 
@@ -23,6 +24,7 @@ export function Quadrant({
   urgency,
   importance,
   onDelete,
+  onComplete,
   onDropTask,
 }: QuadrantProps) {
   const [isOver, setIsOver] = useState(false);
@@ -60,7 +62,9 @@ export function Quadrant({
             Drop a task here.
           </div>
         ) : (
-          tasks.map((task) => <TaskCard key={task.id} task={task} onDelete={onDelete} />)
+          tasks.map((task) => (
+            <TaskCard key={task.id} task={task} onDelete={onDelete} onComplete={onComplete} />
+          ))
         )}
       </div>
     </section>

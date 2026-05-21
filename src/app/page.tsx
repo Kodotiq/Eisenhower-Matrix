@@ -6,6 +6,12 @@ export const dynamic = "force-dynamic";
 
 const priorityLevels = new Set<PriorityLevel>(["High", "Low"]);
 
+function getStartOfToday() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return today;
+}
+
 async function getTasks(): Promise<Task[]> {
   if (!process.env.DATABASE_URL) {
     return [];
@@ -19,16 +25,28 @@ async function getTasks(): Promise<Task[]> {
       },
     });
 
+    const todayStart = getStartOfToday();
+
     return tasks.flatMap((task) =>
       priorityLevels.has(task.urgency as PriorityLevel) &&
       priorityLevels.has(task.importance as PriorityLevel)
-        ? [
-            {
-              ...task,
-              urgency: task.urgency as PriorityLevel,
-              importance: task.importance as PriorityLevel,
-            },
-          ]
+        ? (() => {
+            const completedAt = task.completedAt ? new Date(task.completedAt) : null;
+            const isDaily = task.frequency === "DAILY";
+            const isActive = isDaily ? !completedAt || completedAt < todayStart : !completedAt;
+
+            if (!isActive) {
+              return [];
+            }
+
+            return [
+              {
+                ...task,
+                urgency: task.urgency as PriorityLevel,
+                importance: task.importance as PriorityLevel,
+              },
+            ];
+          })()
         : [],
     );
   } catch {

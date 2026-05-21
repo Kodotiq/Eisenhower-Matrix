@@ -8,15 +8,28 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("POSTGRES_PRISMA_URL")
-  directUrl = env("POSTGRES_URL_NON_POOLING")
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum TaskFrequency {
+  ONE_TIME
+  DAILY
+}
+
+enum TaskCategory {
+  GENERAL
+  PRAYER
 }
 
 model Task {
-  id         String   @id @default(uuid())
-  title      String
-  urgency    String
-  importance String
-  createdAt  DateTime @default(now())
+  id           String        @id @default(uuid())
+  title        String
+  urgency      String
+  importance   String
+  frequency    TaskFrequency @default(ONE_TIME)
+  category     TaskCategory  @default(GENERAL)
+  reminderTime String?
+  completedAt  DateTime?
+  createdAt    DateTime      @default(now())
 }
