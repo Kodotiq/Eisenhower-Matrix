@@ -10,7 +10,7 @@ RUN apt-get update \
 FROM base AS deps
 COPY package.json package-lock.json ./
 COPY prisma ./prisma
-RUN npm ci
+RUN npm install
 
 FROM deps AS builder
 COPY . .
@@ -22,7 +22,7 @@ ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 COPY package.json package-lock.json ./
 COPY prisma ./prisma
-RUN npm ci --omit=dev
+RUN npm install --omit=dev
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/next.config.ts ./next.config.ts
 EXPOSE 3000
