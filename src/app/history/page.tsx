@@ -169,11 +169,12 @@ function formatRangeLabel(start: Date, end: Date) {
 export default async function HistoryPage({
   searchParams,
 }: {
-  searchParams?: { start?: string; end?: string };
+  searchParams?: Promise<{ start?: string; end?: string }>;
 }) {
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const tasks = await getTasks();
-  const startInput = parseDateInput(searchParams?.start);
-  const endInput = parseDateInput(searchParams?.end);
+  const startInput = parseDateInput(resolvedSearchParams?.start);
+  const endInput = parseDateInput(resolvedSearchParams?.end);
 
   let rangeStart = startInput ?? endInput;
   let rangeEnd = endInput ?? startInput;
